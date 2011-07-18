@@ -186,7 +186,7 @@ function og_post_group_types_block($op = 'list', $delta = '', $edit = array()) {
   switch ($op) {
     case 'list':
       $blocks['og-create-links'] = array(
-        'info' => t('OG: permanently Post Links'),
+        'info' => t('OG Details w/ Restricted Create Links'),
       );
       return $blocks;
     
