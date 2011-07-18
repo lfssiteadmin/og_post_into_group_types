@@ -1,0 +1,7 @@
+name = OG Post into Group Types
+description = "Restrict the posting of Group Posts into specified Group Types."
+package = "Organic groups"
+dependencies[] = og
+dependencies[] = og_access
+dependencies[] = strongarm
+core = 6.x

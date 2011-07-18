@@ -1,0 +1,263 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Organic Groups Separate Groups module file
+ */
+
+
+/**
+ * Implementation of hook_menu().
+ */
+function og_post_group_types_menu() {
+  $items = array();
+
+  $items['admin/og/og_separate'] = array(
+    'title' => 'OG Posts by Group Type',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('og_post_group_types_settings'),
+    'access arguments' => array('administer content types'),
+    'file' => 'og_post_group_types.admin.inc',
+  );
+
+  return $items;
+}
+
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function og_post_group_types_form_alter(&$form, $form_state, $form_id) {
+  if ($form['#id'] == 'node-form') {
+    $node = $form['#node'];
+    if (og_is_group_post_type($node->type)) {
+      $original_values = $form['og_nodeapi']['visible']['og_groups'];
+      $groups = og_post_group_types_all_groups_with_type();
+      $is_optgroup = FALSE;
+      if (is_array($original_values['#options'])) {
+        foreach ($original_values['#options'] as $key => $option) {
+          // Are we dealing with option groups?
+          if (!is_numeric($key)) {
+            $is_optgroup = TRUE;
+          }
+        }
+      }
+  
+      foreach ($groups as $group) {
+        $canpost = variable_get('og_post_group_types_'. $group->type .'-'. $node->type, 0);
+        $form['og_nodeapi']['visible']['og_public']['#type'] = 'value';
+        if ($canpost) {
+          $form['og_nodeapi']['visible']['og_public']['#default_value'] = variable_get('og_post_group_types_visibility_'. $group->type, 0) == '1';
+        }
+        else {
+          if ($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]) {
+            unset($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]);
+          } 
+          elseif ($form['og_nodeapi']['visible']['og_groups']['#options'][t('My groups')][$group->nid]) {
+            unset($form['og_nodeapi']['visible']['og_groups']['#options'][t('My groups')][$group->nid]);
+          } 
+          elseif ($form['og_nodeapi']['visible']['og_groups']['#options'][t('Other groups')][$group->nid]) {
+            unset($form['og_nodeapi']['visible']['og_groups']['#options'][t('Other groups')][$group->nid]);
+          } 
+        }
+      }
+      if ($form['og_nodeapi']['visible']['og_public']['#default_value']) {
+        $form['og_nodeapi']['visible']['og_post_group_types_public'] = array(
+          '#type' => 'item',
+          '#value' => t('This post will be <strong>public</strong>.'),
+        );
+      } 
+      else {
+        $form['og_nodeapi']['visible']['og_post_group_types_public'] = array(
+          '#type' => 'item',
+          '#value' => t('This post will be <strong>private</strong>.'),
+        );
+      }
+    }
+    else {
+      switch (variable_get('og_post_group_types_list_'. $node->type, 3)) {
+        case 0:
+          $form['og_directory']['#type'] = 'value';
+          $form['og_directory']['#default_value'] = FALSE;
+          $form['og_private']['#type'] = 'value';
+          $form['og_private']['#default_value'] = TRUE;
+          drupal_set_message(t('This group will not be listed in public directory'));
+          break;
+        case 1:
+          $form['og_directory']['#type'] = 'value';
+          $form['og_directory']['#default_value'] = TRUE;
+          $form['og_private']['#type'] = 'value';
+          $form['og_private']['#default_value'] = FALSE;
+          drupal_set_message(t('This group will be listed in public directory'));
+          break;
+        case 2:
+          $form['og_directory']['#default_value'] = TRUE;
+          break;
+        default:
+          $form['og_directory']['#default_value'] = FALSE;
+      }
+    }
+  }
+}
+
+
+/**
+ * Used as a helper, to get the group type of the node
+ */
+function og_post_group_types_all_groups_with_type() {
+  static $results = array();
+  if (!count($results)) {
+    list($types, $args) = og_get_sql_args();
+    $sql = "SELECT n.nid, n.type FROM {node} n WHERE n.type ". $args ." AND n.status = 1 ORDER BY n.nid ASC";
+    $result = db_query($sql, $types);
+    while ($row = db_fetch_object($result)) {
+      $results[$row->nid] = $row;
+    }
+  }
+  return $results;
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function og_post_group_types_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
+  switch ($op) {
+    case 'view':
+      if (og_is_group_type($node->type) && !$teaser && $page) {
+        og_post_group_types_view_group($node, $teaser, $page);
+      }
+    break;
+  }
+}
+
+/**
+ * Embed the configured group homepage.
+ */
+function og_post_group_types_view_group($node, $teaser, $page) {
+  if ($name = variable_get('og_post_group_types_view_'. $node->type, variable_get('og_home_page_view', 'og_ghp_ron'))) {
+    // There is a view defiened to act as the group's home page.
+    $view = views_get_view($name);
+    if (!$view) {
+      drupal_set_message(t('The View %name was not found. Check your variables table or settings.php.', array('%name' => $name)), 'error');
+    }
+    else {
+      $built = $view->preview('default', array($node->nid));
+    }
+
+    // Views will set either total_rows or num_rows depending on whether
+    // View has a pager, or might show an empty text.
+    if (!empty($view->total_rows) || !empty($view->num_rows) || !empty($view->page_empty) || $view->display_handler->get_option('empty')) {
+      $node->content['view'] = array('#value' => $built);
+    }
+    elseif (empty($_POST)) {
+      // If views hasn't show any text we show og's empty text.
+      // Otherwise show it to everybody.
+      og_home_empty($node);
+    }
+    
+    drupal_set_title(filter_xss_admin($view->build_info['title']));
+    drupal_add_feed(url("node/$node->nid/feed"), drupal_get_title());
+  }
+  else {
+    drupal_set_title(filter_xss_admin($node->title));
+  }
+}
+
+/**
+ * Implementation of hook_strongarm().
+ */
+function og_post_group_types_strongarm() {
+  $conf = array();
+
+  $conf['og_home_page_view'] = 0;
+  $conf['og_visibility_directory'] = OG_DIRECTORY_CHOOSE_TRUE;
+  $conf['og_visibility'] = 3;
+  return $conf;
+}
+
+
+/**
+ * Implementation of hook_block().
+ *
+ */
+
+function og_post_group_types_block($op = 'list', $delta = '', $edit = array()) {
+  switch ($op) {
+    case 'list':
+      $blocks['og-create-links'] = array(
+        'info' => t('OG: permanently Post Links'),
+      );
+      return $blocks;
+    
+    case 'view':
+      return og_post_group_types_block_contents();
+  }
+}
+
+/**
+ * A block content function.
+ */
+ 
+function og_post_group_types_block_contents() {
+  global $user;
+
+  // Only display group details if we have a group context.
+  if (($node = og_get_group_context()) && node_access('view', $node)) {
+    list($txt, $subscription) = og_subscriber_count_link($node);
+    if ($subscription == 'active' || user_access('administer nodes')) {
+      $links = module_invoke_all('og_create_links', $node);      
+      foreach($links as $key => $link){;
+        //grab string after 'create_'
+        $content_type = substr($key, 7, strlen($key) - 7);
+        if ( variable_get('og_post_group_types_' . $node->type . '-' . $content_type, 0 ) == 0 ){
+          unset($links['create_' . $content_type]);
+          //trying to modify original og details block
+          //drupal_alter('og', 'block', 'view', 0);  
+        }
+      }      
+      
+      // We want to open this up for OG_INVITE_ONLY but we need to handle invitation workflow much better. See http://drupal.org/node/170332
+      if ($node->og_selective < OG_INVITE_ONLY) {
+        $links['invite'] = l(t('Invite friend'), "og/invite/$node->nid");
+      }
+      $links['subscribers'] = $txt;
+      $links['manager'] = t('Manager: !name', array('!name' => theme('username', $node)));
+
+      // Site admins get a Join link if they are not yet subscribed.
+      $subscribe = isset($subscription) && og_is_group_member($node->nid, FALSE) ? l(t('My membership'), "og/manage/$node->nid") : og_subscribe_link($node);
+      if(isset($subscribe)) {
+        $links['my_membership'] = $subscribe;
+      }
+    }
+    elseif ($subscription == 'requested') {
+      $links['approval'] = t('Your membership request awaits approval.');
+      $links['delete'] = l(t('Delete request'), "og/unsubscribe/$node->nid/$user->uid", array('query' => 'destination=og'));
+    }
+    elseif (!$user->uid) {
+      $dest = drupal_get_destination();
+      if (variable_get('user_register', 1) == 0) {
+        $links['must_login'] = t('You must <a href="!login">login</a> in order to post into this group.', array('!login' => url("user/login", array('query' => $dest))));
+      }
+      else {
+        $links['must_login'] = t('You must <a href="!register">register</a> or <a href="!login">login</a> in order to post into this group.', array('!register' => url("user/register", array('query' => $dest)), '!login' => url("user/login", array('query' => $dest))));
+      }
+    }
+    elseif ($node->og_selective < OG_INVITE_ONLY) {
+      $links['subscribe'] = og_subscribe_link($node);
+    }
+    elseif ($node->og_selective == OG_INVITE_ONLY) {
+      $links['closed'] = t('This is an <em>invite only</em> group. The group administrators add/remove members as needed.');
+    }
+    elseif ($node->og_selective == OG_CLOSED) {
+      $links['closed'] = t('This is a <em>closed</em> group. The group administrators add/remove members as needed.');
+    }
+
+    // Modify these links by reference. If you want control of the whole block, see og_block_details().
+    drupal_alter('og_links', $links, $node);
+
+    $block['content'] = theme('item_list', $links);
+    $block['subject'] = l($node->title, "node/$node->nid");
+    return $block;
+  }
+}
