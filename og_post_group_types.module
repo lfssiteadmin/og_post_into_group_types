@@ -3,7 +3,7 @@
 
 /**
  * @file
- * Organic Groups Separate Groups module file
+ * OG Post into Group Types module file
  */
 
 
@@ -13,7 +13,8 @@
 function og_post_group_types_menu() {
   $items = array();
 
-  $items['admin/og/og_separate'] = array(
+  //administration page
+  $items['admin/og/og_post_group_types'] = array(
     'title' => 'OG Posts by Group Type',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('og_post_group_types_settings'),
@@ -43,14 +44,14 @@ function og_post_group_types_form_alter(&$form, $form_state, $form_id) {
           }
         }
       }
-  
+      
+      //unset audience <option>s belonging to unpermitted group types
       foreach ($groups as $group) {
         $canpost = variable_get('og_post_group_types_'. $group->type .'-'. $node->type, 0);
+        //force post to be non-public so that a group must be selected. 
+        //this is the essential mechanism for limiting post visibility by group type
         $form['og_nodeapi']['visible']['og_public']['#type'] = 'value';
-        if ($canpost) {
-          $form['og_nodeapi']['visible']['og_public']['#default_value'] = variable_get('og_post_group_types_visibility_'. $group->type, 0) == '1';
-        }
-        else {
+        if (!$canpost) {
           if ($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]) {
             unset($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]);
           } 

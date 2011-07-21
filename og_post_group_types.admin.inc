@@ -82,7 +82,7 @@ function og_post_group_types_settings() {
  * Submit handler for og_post_group_types_settings()
  */
 function og_post_group_types_settings_validate($form, &$form_state) {
-  //current no validation
+  //currently no validation
 }
 
 /**

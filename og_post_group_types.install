@@ -15,4 +15,18 @@ function og_post_group_types_enable() {
   db_query("UPDATE {system} SET weight = 5 WHERE name = 'og_post_group_types'");
 }
 
-//!!need to add variable removal on uninstall
+
+/**
+ * Implementation of hook_install().
+ */
+function og_post_group_types_install() {
+  drupal_set_message('Please visit ' . l('The <i>OG Post into Group Types</i> Administration Page to set OG Post restrictions. By default, no OG Post Types are enabled.', 'admin/og/og_post_group_types', array('HTML' => TRUE)));
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function og_post_group_types_uninstall() {
+  db_query("DELETE FROM {variable} WHERE name LIKE 'og_post_group_types_%%' ");
+}
