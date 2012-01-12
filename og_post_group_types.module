@@ -50,7 +50,7 @@ function og_post_group_types_form_alter(&$form, $form_state, $form_id) {
         $canpost = variable_get('og_post_group_types_'. $group->type .'-'. $node->type, 0);
         //force post to be non-public so that a group must be selected. 
         //this is the essential mechanism for limiting post visibility by group type
-        $form['og_nodeapi']['visible']['og_public']['#type'] = 'value';
+        #$form['og_nodeapi']['visible']['og_public']['#type'] = 'value';
         if (!$canpost) {
           if ($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]) {
             unset($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]);
