@@ -51,7 +51,7 @@ function og_post_group_types_form_alter(&$form, $form_state, $form_id) {
         //force post to be non-public so that a group must be selected. 
         //this is the essential mechanism for limiting post visibility by group type
         #$form['og_nodeapi']['visible']['og_public']['#type'] = 'value';
-        if (!$canpost) {
+        if (!$canpost || $group->status==0) {
           if ($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]) {
             unset($form['og_nodeapi']['visible']['og_groups']['#options'][$group->nid]);
           } 
@@ -74,7 +74,7 @@ function og_post_group_types_all_groups_with_type() {
   static $results = array();
   if (!count($results)) {
     list($types, $args) = og_get_sql_args();
-    $sql = "SELECT n.nid, n.type FROM {node} n WHERE n.type ". $args ." AND n.status = 1 ORDER BY n.nid ASC";
+    $sql = "SELECT n.nid, n.type,n.status FROM {node} n WHERE n.type ". $args ." ORDER BY n.nid ASC";
     $result = db_query($sql, $types);
     while ($row = db_fetch_object($result)) {
       $results[$row->nid] = $row;
